@@ -13,7 +13,7 @@ class Command(BaseCommand):
         """ Entry point for command. """
         self.stdout.write('Waiting for database...')
         db_ready = False
-        while not db_ready:
+        while db_ready is False:
             try:
                 self.check(databases=['default'])
                 db_ready = True
