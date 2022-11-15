@@ -41,9 +41,11 @@ INSTALLED_APPS = [
     # Third party apps
     'drf_spectacular',
     'rest_framework',
+    'rest_framework.authtoken',
 
     # Local apps
     'core.apps.CoreConfig',
+    'user.apps.UserConfig',
 ]
 
 MIDDLEWARE = [
@@ -138,6 +140,9 @@ AUTH_USER_MODEL = 'core.User'
 
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework.authentication.TokenAuthentication',
+    ),
 }
 
 SPECTACULAR_SETTINGS = {

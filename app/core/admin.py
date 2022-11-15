@@ -44,7 +44,7 @@ class UserAdmin(BaseUserAdmin):
             ),
         }),
     )
-    list_display = ('email', 'first_name', 'last_name', 'is_staff')
+    list_display = ('email', 'id', 'first_name', 'last_name', 'is_staff')
     readonly_fields = ['last_login', 'date_joined']
     search_fields = ('email', 'first_name', 'last_name')
     ordering = ('email',)
