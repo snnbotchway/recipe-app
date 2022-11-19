@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     # Local apps
     'core.apps.CoreConfig',
     'user.apps.UserConfig',
+    'recipe.apps.RecipeConfig',
 ]
 
 MIDDLEWARE = [
@@ -143,6 +144,7 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework.authentication.TokenAuthentication',
     ),
+    'COERCE_DECIMAL_TO_STRING': False,
 }
 
 SPECTACULAR_SETTINGS = {
