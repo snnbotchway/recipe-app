@@ -21,3 +21,14 @@ class Recipe(models.Model):
     def __str__(self):
         """Return recipe title as object name"""
         return self.title
+
+
+class Tag(models.Model):
+    """Tag object."""
+    user = models.ForeignKey(
+        get_user_model(), on_delete=models.CASCADE)
+    name = models.CharField(max_length=255)
+
+    def __str__(self):
+        """Return recipe title as object name"""
+        return self.name
