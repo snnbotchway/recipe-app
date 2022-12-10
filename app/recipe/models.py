@@ -30,5 +30,5 @@ class Tag(models.Model):
     name = models.CharField(max_length=255)
 
     def __str__(self):
-        """Return recipe title as object name"""
+        """Return tag name as object name"""
         return self.name

@@ -3,12 +3,14 @@
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.viewsets import ModelViewSet
 
-from .models import Recipe
-from .serializers import RecipeDetailSerializer, RecipeSerializer
+from .models import Recipe, Tag
+from .serializers import (RecipeDetailSerializer,
+                          RecipeSerializer,
+                          TagSerializer)
 
 
 class RecipeViewSet(ModelViewSet):
-    """View for the recipe APIs"""
+    """View for the recipe API"""
     permission_classes = [IsAuthenticated]
     queryset = Recipe.objects.all()
 
@@ -24,6 +26,23 @@ class RecipeViewSet(ModelViewSet):
         if self.action == 'list':
             return RecipeSerializer
         return RecipeDetailSerializer
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class TagViewSet(ModelViewSet):
+    """View for the tag API"""
+    permission_classes = [IsAuthenticated]
+    queryset = Tag.objects.all()
+    serializer_class = TagSerializer
+
+    def get_queryset(self):
+        """
+        Filter tags by current user id
+        (current user can see only his tags)
+        """
+        return self.queryset.filter(user=self.request.user.id).order_by('-id')
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
