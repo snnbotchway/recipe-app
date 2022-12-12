@@ -140,7 +140,7 @@ class PrivateIngredientAPITests(TestCase):
         self.assertDictContainsSubset(serializer.data, response.data)
 
     def test_get_ingredient_detail_if_not_exists_returns_404(self):
-        """Test get ingredient which doesn"t exist returns error 404"""
+        """Test get ingredient which doesn't exist returns error 404"""
         ingredient = create_ingredient(user=self.user1)
 
         response = self.client.get(ingredient_detail_url(ingredient.id+1))
@@ -150,7 +150,7 @@ class PrivateIngredientAPITests(TestCase):
         self.assertFalse(response.data.get("id"))
 
     def test_get_other_user_ingredient_detail_returns_404(self):
-        """Test get ingredient which doesn"t belong to you returns error 404"""
+        """Test get ingredient which doesn't belong to you returns error 404"""
         ingredient = create_ingredient(user=self.user2)
 
         response = self.client.get(ingredient_detail_url(ingredient.id))
