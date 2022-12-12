@@ -15,7 +15,7 @@ from .serializers import (
 class RecipeViewSet(ModelViewSet):
     """View set for the recipe API"""
     permission_classes = [IsAuthenticated]
-    queryset = Recipe.objects.all().prefetch_related("tags")
+    queryset = Recipe.objects.all().prefetch_related("tags", "ingredients")
 
     def get_queryset(self):
         """
@@ -54,7 +54,7 @@ class TagViewSet(ModelViewSet):
 class IngredientViewSet(ModelViewSet):
     """View set for the Ingredient API"""
     permission_classes = [IsAuthenticated]
-    queryset = Ingredient.objects.all()
+    queryset = Ingredient.objects.all().annotate(recipe_count=Count('recipes'))
     serializer_class = IngredientSerializer
 
     def get_queryset(self):

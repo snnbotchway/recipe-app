@@ -19,6 +19,8 @@ class Recipe(models.Model):
     link = models.CharField(max_length=255, blank=True)
     tags = models.ManyToManyField(
         "Tag", related_name="recipes", blank=True)
+    ingredients = models.ManyToManyField(
+        "Ingredient", related_name="recipes", blank=True)
 
     def __str__(self):
         """Return recipe title as object name"""
