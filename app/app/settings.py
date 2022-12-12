@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/3.2/ref/settings/
 """
 import os
+import sys
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -58,6 +59,21 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+TESTING_MODE = 'test' in sys.argv
+DEV_MODE = DEBUG and not TESTING_MODE
+
+if DEV_MODE:
+    """Configure django debug toolbar for development."""
+    INSTALLED_APPS += ['debug_toolbar']
+    MIDDLEWARE += ['debug_toolbar.middleware.DebugToolbarMiddleware']
+
+    INTERNAL_IPS = ['127.0.0.1', "0.0.0.0:8000"]
+
+    import socket
+    hostname, _, ips = socket.gethostbyname_ex(socket.gethostname())
+    INTERNAL_IPS = [ip[: ip.rfind(".")] + ".1" for ip in ips] + \
+        ["127.0.0.1", "10.0.2.2", "0.0.0.0:8000"]
 
 ROOT_URLCONF = 'app.urls'
 
