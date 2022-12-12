@@ -42,3 +42,22 @@ class Tag(models.Model):
     def __str__(self):
         """Return tag name as object name"""
         return self.name
+
+
+class Ingredient(models.Model):
+    """Ingredient object."""
+    user = models.ForeignKey(
+        get_user_model(), on_delete=models.CASCADE)
+    name = models.CharField(max_length=255)
+
+    class Meta:
+        """Set no user can have duplicate ingredient constraint"""
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'name'], name='unique ingredients'
+            )
+        ]
+
+    def __str__(self):
+        """Return ingredient name as object name"""
+        return self.name

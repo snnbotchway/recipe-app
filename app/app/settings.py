@@ -65,10 +65,10 @@ DEV_MODE = DEBUG and not TESTING_MODE
 
 if DEV_MODE:
     """Configure django debug toolbar for development."""
-    INSTALLED_APPS += ['debug_toolbar']
-    MIDDLEWARE += ['debug_toolbar.middleware.DebugToolbarMiddleware']
+    INSTALLED_APPS += ["debug_toolbar"]
+    MIDDLEWARE += ["debug_toolbar.middleware.DebugToolbarMiddleware"]
 
-    INTERNAL_IPS = ['127.0.0.1', "0.0.0.0:8000"]
+    INTERNAL_IPS = ["127.0.0.1", "0.0.0.0:8000"]
 
     import socket
     hostname, _, ips = socket.gethostbyname_ex(socket.gethostname())
