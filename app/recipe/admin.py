@@ -13,11 +13,18 @@ class TagInline(admin.TabularInline):
     extra = 1
 
 
+class IngredientInline(admin.TabularInline):
+    """Inline class for recipe ingredients and ingredient recipes."""
+    model = Recipe.ingredients.through
+    autocomplete_fields = ['ingredient', 'recipe']
+    extra = 1
+
+
 @admin.register(Recipe)
 class RecipeAdmin(admin.ModelAdmin):
     """Recipe model configuration for the admin site"""
     autocomplete_fields = ['user']
-    inlines = [TagInline]
+    inlines = [IngredientInline, TagInline]
     list_display = ['title', 'user', 'id', 'price', 'time_minutes']
     list_editable = ['price', 'time_minutes']
     list_select_related = ['user']
@@ -38,6 +45,7 @@ class TagAdmin(admin.ModelAdmin):
 class IngredientAdmin(admin.ModelAdmin):
     """Ingredient model configuration for the admin site"""
     autocomplete_fields = ['user']
+    inlines = [IngredientInline]
     list_display = ['name', 'user', 'id']
     list_select_related = ['user']
     search_fields = ['name__icontains']
