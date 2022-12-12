@@ -97,8 +97,6 @@ class PrivateTagAPITests(TestCase):
     def test_tag_list_is_limited_to_user_and_returns_200(self):
         """Test that authenticated user can get only his/her tags."""
         create_tag(user=self.user1)
-        create_tag(user=self.user1)
-        create_tag(user=self.user2)
         create_tag(user=self.user2)
 
         response = self.client.get(TAGS_URL)
@@ -106,7 +104,9 @@ class PrivateTagAPITests(TestCase):
         tags = Tag.objects.filter(user=self.user1).order_by('-id')
         serializer = TagSerializer(tags, many=True)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data, serializer.data)
+        for index in range(len(response.data)):
+            self.assertDictContainsSubset(
+                serializer.data[index], response.data[index])
 
     def test_user_create_tag_with_invalid_data_returns_400(self):
         """Test authenticated user cannot create tag with invalid data"""
@@ -136,7 +136,7 @@ class PrivateTagAPITests(TestCase):
 
         serializer = TagSerializer(tag)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data, serializer.data)
+        self.assertDictContainsSubset(serializer.data, response.data)
 
     def test_get_tag_detail_if_not_exists_returns_404(self):
         """Test get tag which doesn't exist returns error 404"""
@@ -144,9 +144,9 @@ class PrivateTagAPITests(TestCase):
 
         response = self.client.get(tag_detail_url(tag.id+1))
 
-        serializer = TagSerializer(tag)
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
-        self.assertNotEqual(response.data, serializer.data)
+        self.assertTrue(response.data["detail"])
+        self.assertFalse(response.data.get("id"))
 
     def test_get_other_user_tag_detail_returns_404(self):
         """Test get tag which doesn't belong to you returns error 404"""
@@ -154,9 +154,8 @@ class PrivateTagAPITests(TestCase):
 
         response = self.client.get(tag_detail_url(tag.id))
 
-        serializer = TagSerializer(tag)
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
-        self.assertNotEqual(response.data, serializer.data)
+        self.assertTrue(response.data["detail"])
+        self.assertFalse(response.data.get("id"))
 
     def test_partial_update_tag_returns_200(self):
         """Test authenticated user can edit given tag"""
