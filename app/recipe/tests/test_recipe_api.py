@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from recipe.models import Recipe
+from recipe.models import Recipe, Tag
 from recipe.serializers import RecipeDetailSerializer, RecipeSerializer
 
 from rest_framework import status
@@ -32,6 +32,11 @@ def create_recipe(user, **params):
     }
     defaults.update(params)
     return Recipe.objects.create(user=user, **defaults)
+
+
+def create_tag(user, name):
+    """Creates and returns new tag"""
+    return Tag.objects.create(user=user, name=name)
 
 
 class PublicRecipeAPITests(TestCase):
@@ -111,6 +116,16 @@ class PrivateRecipeAPITests(TestCase):
             email='test2@example.com',
             password='testPass123')
         self.client.force_authenticate(user=self.user1)
+        self.payload_with_tags = {
+            "title": "Sample recipe title",
+            "time_minutes": 1,
+            "description": "Same recipe description",
+            "price": Decimal(1),
+            "link": "https://recipelink.com",
+            "tags": [{"name": "Tag1"}, {"name": "Tag2"}],
+        }
+        self.update_tag_payload = {
+            "tags": [{"name": "NewTag1"}, {"name": "NewTag2"}]}
 
     def test_recipe_list_is_limited_to_user_and_returns_200(self):
         """Test that authenticated user can get only his/her recipes."""
@@ -279,3 +294,245 @@ class PrivateRecipeAPITests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         self.assertTrue(response.data["detail"])
         self.assertTrue(Recipe.objects.filter(id=recipe.id).exists())
+
+    def test_create_recipe_with_non_existing_tags(self):
+        """
+        Test users can create recipe with new tags.
+        Tags which do not exist should be created.
+        """
+        payload = self.payload_with_tags
+
+        response = self.client.post(RECIPES_URL, payload, format="json")
+
+        recipe = Recipe.objects.get(id=response.data["id"])
+        serializer = RecipeDetailSerializer(recipe)
+        tags = Tag.objects.all()
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data, serializer.data)
+        self.assertEqual(recipe.user, self.user1)
+        self.assertEqual(recipe.title, payload["title"])
+        self.assertEqual(recipe.description, payload["description"])
+        payload_tag_array = payload["tags"]
+        for index in range(len(payload_tag_array)):
+            for key in payload_tag_array[index]:
+                # Test if tags were created:
+                self.assertEqual(
+                    payload_tag_array[index][key], tags[index].name)
+                # Test if recipe has the tags:
+                self.assertEqual(
+                    payload_tag_array[index][key],
+                    recipe.tags.all()[index].name)
+
+    def test_create_recipe_with_existing_tags(self):
+        """
+        Test users can create recipe with existing tags.
+        These tags should not be created again to avoid duplicates.
+        """
+        Tag.objects.create(name="Tag1", user=self.user1)
+        Tag.objects.create(name="Tag2", user=self.user1)
+        payload = self.payload_with_tags
+
+        response = self.client.post(RECIPES_URL, payload, format="json")
+
+        recipe = Recipe.objects.get(id=response.data["id"])
+        serializer = RecipeDetailSerializer(recipe)
+        tags = Tag.objects.all()
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data, serializer.data)
+        self.assertEqual(tags.count(), 2)
+        self.assertEqual(recipe.user, self.user1)
+        self.assertEqual(recipe.time_minutes, payload["time_minutes"])
+        self.assertEqual(recipe.link, payload["link"])
+        payload_tag_array = payload["tags"]
+        for index in range(len(payload_tag_array)):
+            for key in payload_tag_array[index]:
+                # Test if recipe has the tags:
+                self.assertEqual(
+                    payload_tag_array[index][key],
+                    recipe.tags.all()[index].name)
+
+    def test_create_recipe_with_some_existing_tags(self):
+        """Tags which do not exist should be created and vice-versa"""
+        Tag.objects.create(name="Tag1", user=self.user1)
+        payload = self.payload_with_tags
+
+        response = self.client.post(RECIPES_URL, payload, format="json")
+
+        recipe = Recipe.objects.get(id=response.data["id"])
+        serializer = RecipeDetailSerializer(recipe)
+        tags = Tag.objects.all()
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data, serializer.data)
+        self.assertEqual(tags.count(), 2)
+        self.assertEqual(recipe.user, self.user1)
+        self.assertEqual(recipe.price, payload["price"])
+        payload_tag_array = payload["tags"]
+        for index in range(len(payload_tag_array)):
+            for key in payload_tag_array[index]:
+                # Test if recipe has the tags:
+                self.assertEqual(
+                    payload_tag_array[index][key],
+                    recipe.tags.all()[index].name)
+
+    def test_update_recipe_without_tags(self):
+        """
+        Test users can add tags to recipes without tags.
+        Tags which do not exist should be created.
+        """
+        recipe = create_recipe(user=self.user1)
+        payload = self.update_tag_payload
+
+        response = self.client.patch(recipe_detail_url(
+            recipe_id=recipe.id), payload, format="json")
+
+        tags = Tag.objects.all()
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        recipe.refresh_from_db()
+        self.assertEqual(recipe.user, self.user1)
+        self.assertEqual(tags.count(), 2)
+        payload_tag_array = payload["tags"]
+        for index in range(len(payload_tag_array)):
+            for key in payload_tag_array[index]:
+                # Test if tags were created:
+                self.assertEqual(
+                    payload_tag_array[index][key], tags[index].name)
+                # Test if recipe has the tags:
+                self.assertEqual(
+                    payload_tag_array[index][key],
+                    recipe.tags.all()[index].name)
+
+    def test_update_recipe_with_non_existing_tags(self):
+        """
+        Test users can update recipe with new tags.
+        Tags which do not exist should be created.
+        """
+        recipe = create_recipe(user=self.user1)
+        tag1 = create_tag(user=self.user1, name="OldTag1")
+        tag2 = create_tag(user=self.user1, name="OldTag2")
+        recipe.tags.add(tag1, tag2)
+        payload = self.update_tag_payload
+
+        response = self.client.patch(recipe_detail_url(
+            recipe_id=recipe.id), payload, format="json")
+
+        tags = Tag.objects.all()
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(tags.count(), 4)
+        payload_tag_array = payload["tags"]
+        for index in range(len(payload_tag_array)):
+            for key in payload_tag_array[index]:
+                # Test if recipe has the tags:
+                self.assertEqual(
+                    payload_tag_array[index][key],
+                    recipe.tags.all()[index].name)
+
+    def test_update_recipe_with_existing_tags(self):
+        """
+        Test users can update recipe with existing tags.
+        These tags should not be created again to avoid duplicates.
+        """
+        recipe = create_recipe(user=self.user1)
+        tag1 = create_tag(user=self.user1, name="OldTag1")
+        tag2 = create_tag(user=self.user1, name="OldTag2")
+        recipe.tags.add(tag1, tag2)
+        create_tag(self.user1, "NewTag1")
+        create_tag(self.user1, "NewTag2")
+        payload = self.update_tag_payload
+
+        response = self.client.patch(recipe_detail_url(
+            recipe_id=recipe.id), payload, format="json")
+
+        tags = Tag.objects.all()
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(tags.count(), 4)
+        payload_tag_array = payload["tags"]
+        for index in range(len(payload_tag_array)):
+            for key in payload_tag_array[index]:
+                # Test if recipe has the tags:
+                self.assertEqual(
+                    payload_tag_array[index][key],
+                    recipe.tags.all()[index].name)
+
+    def test_update_recipe_with_some_existing_tags(self):
+        """Tags which do not exist should be created and vice-versa"""
+        recipe = create_recipe(user=self.user1)
+        tag1 = create_tag(user=self.user1, name="OldTag1")
+        tag2 = create_tag(user=self.user1, name="OldTag2")
+        recipe.tags.add(tag1, tag2)
+        create_tag(self.user1, "NewTag1")
+        payload = self.update_tag_payload
+
+        response = self.client.patch(recipe_detail_url(
+            recipe_id=recipe.id), payload, format="json")
+
+        tags = Tag.objects.all()
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(tags.count(), 4)
+        payload_tag_array = payload["tags"]
+        for index in range(len(payload_tag_array)):
+            for key in payload_tag_array[index]:
+                # Test if recipe has the tags:
+                self.assertEqual(
+                    payload_tag_array[index][key],
+                    recipe.tags.all()[index].name)
+
+    def test_update_recipe_to_clear_tags(self):
+        """Test if recipe is updated with no tags, its tags are cleared."""
+        recipe = create_recipe(user=self.user1)
+        tag1 = create_tag(user=self.user1, name="OldTag1")
+        tag2 = create_tag(user=self.user1, name="OldTag2")
+        recipe.tags.add(tag1, tag2)
+        payload = {"tags": []}
+
+        response = self.client.patch(recipe_detail_url(
+            recipe_id=recipe.id), payload, format="json")
+
+        tags = Tag.objects.all()
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(tags.count(), 2)
+        self.assertFalse(recipe.tags.all().exists())
+
+    def test_tags_remain_if_not_specified_in_payload(self):
+        """
+        Test recipe tags are not cleared when tags are not specified
+        in the payload.
+        """
+        recipe = create_recipe(user=self.user1)
+        tag1 = create_tag(user=self.user1, name="Tag1")
+        tag2 = create_tag(user=self.user1, name="Tag2")
+        recipe.tags.add(tag1, tag2)
+        payload = {
+            "title": "New recipe title",
+            "description": "New description",
+            "price": Decimal('2.45'),
+        }
+
+        response = self.client.patch(
+            recipe_detail_url(recipe.id), payload)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(recipe.tags.count(), 2)
+
+    def test_full_recipe_update_with_tags(self):
+        """Test put request for full updates on recipes."""
+        recipe = create_recipe(user=self.user1)
+        payload = self.payload_with_tags
+
+        response = self.client.put(
+            recipe_detail_url(recipe.id), payload, format="json")
+
+        tags = Tag.objects.all()
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        recipe.refresh_from_db()
+        self.assertEqual(recipe.user, self.user1)
+        self.assertEqual(tags.count(), 2)
+        payload_tag_array = payload["tags"]
+        for index in range(len(payload_tag_array)):
+            for key in payload_tag_array[index]:
+                # Test if tags were created:
+                self.assertEqual(
+                    payload_tag_array[index][key], tags[index].name)
+                # Test if recipe has the tags:
+                self.assertEqual(
+                    payload_tag_array[index][key],
+                    recipe.tags.all()[index].name)
