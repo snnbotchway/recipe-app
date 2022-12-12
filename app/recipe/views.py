@@ -1,4 +1,5 @@
 """Views for the recipe APIs"""
+from django.db.models import Count
 
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.viewsets import ModelViewSet
@@ -12,7 +13,7 @@ from .serializers import (RecipeDetailSerializer,
 class RecipeViewSet(ModelViewSet):
     """View for the recipe API"""
     permission_classes = [IsAuthenticated]
-    queryset = Recipe.objects.all()
+    queryset = Recipe.objects.all().prefetch_related("tags")
 
     def get_queryset(self):
         """
@@ -34,7 +35,7 @@ class RecipeViewSet(ModelViewSet):
 class TagViewSet(ModelViewSet):
     """View for the tag API"""
     permission_classes = [IsAuthenticated]
-    queryset = Tag.objects.all()
+    queryset = Tag.objects.all().annotate(recipe_count=Count('recipes'))
     serializer_class = TagSerializer
 
     def get_queryset(self):

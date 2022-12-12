@@ -17,6 +17,8 @@ class Recipe(models.Model):
         ])
     description = models.TextField()
     link = models.CharField(max_length=255, blank=True)
+    tags = models.ManyToManyField(
+        "Tag", related_name="recipes", blank=True)
 
     def __str__(self):
         """Return recipe title as object name"""
@@ -28,6 +30,14 @@ class Tag(models.Model):
     user = models.ForeignKey(
         get_user_model(), on_delete=models.CASCADE)
     name = models.CharField(max_length=255)
+
+    class Meta:
+        """Set no user can have duplicate tags constraint"""
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'name'], name='unique tags'
+            )
+        ]
 
     def __str__(self):
         """Return tag name as object name"""
