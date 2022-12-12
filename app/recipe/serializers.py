@@ -6,30 +6,30 @@ from .models import (
     Recipe, Tag, Ingredient)
 
 
-class IngredientSerializer(serializers.ModelSerializer):
+class BaseRecipeAttrSerializer(serializers.ModelSerializer):
+    """Base serializer for recipe's many to many relations."""
+    recipe_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        fields = [
+            'id',
+            'name',
+            'recipe_count',
+        ]
+
+
+class IngredientSerializer(BaseRecipeAttrSerializer):
     """Ingredient serializer"""
-    recipe_count = serializers.IntegerField(read_only=True)
 
-    class Meta:
+    class Meta(BaseRecipeAttrSerializer.Meta):
         model = Ingredient
-        fields = [
-            'id',
-            'name',
-            'recipe_count',
-        ]
 
 
-class TagSerializer(serializers.ModelSerializer):
+class TagSerializer(BaseRecipeAttrSerializer):
     """Tag serializer"""
-    recipe_count = serializers.IntegerField(read_only=True)
 
-    class Meta:
+    class Meta(BaseRecipeAttrSerializer.Meta):
         model = Tag
-        fields = [
-            'id',
-            'name',
-            'recipe_count',
-        ]
 
 
 class RecipeSerializer(serializers.ModelSerializer):

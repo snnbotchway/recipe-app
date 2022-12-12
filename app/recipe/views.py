@@ -12,17 +12,25 @@ from .serializers import (
     IngredientSerializer,)
 
 
-class RecipeViewSet(ModelViewSet):
-    """View set for the recipe API"""
+class BaseRecipeOrAttrViewSet(ModelViewSet):
+    """Base view set for recipe and its attributes."""
     permission_classes = [IsAuthenticated]
-    queryset = Recipe.objects.all().prefetch_related("tags", "ingredients")
 
     def get_queryset(self):
         """
-        Filter recipes by current user id
-        (current user can see only his recipes)
+        Filter queryset by current user id
+        (current user can see only his specified items)
         """
         return self.queryset.filter(user=self.request.user.id).order_by('-id')
+
+    def perform_create(self, serializer):
+        """Provide serializer with current user."""
+        serializer.save(user=self.request.user)
+
+
+class RecipeViewSet(BaseRecipeOrAttrViewSet):
+    """View set for the recipe API"""
+    queryset = Recipe.objects.all().prefetch_related("tags", "ingredients")
 
     def get_serializer_class(self):
         """Determines which serializer to use"""
@@ -30,39 +38,14 @@ class RecipeViewSet(ModelViewSet):
             return RecipeSerializer
         return RecipeDetailSerializer
 
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
 
-
-class TagViewSet(ModelViewSet):
+class TagViewSet(BaseRecipeOrAttrViewSet):
     """View set for the tag API"""
-    permission_classes = [IsAuthenticated]
     queryset = Tag.objects.all().annotate(recipe_count=Count('recipes'))
     serializer_class = TagSerializer
 
-    def get_queryset(self):
-        """
-        Filter tags by current user id
-        (current user can see only his tags)
-        """
-        return self.queryset.filter(user=self.request.user.id).order_by('-id')
 
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
-
-
-class IngredientViewSet(ModelViewSet):
+class IngredientViewSet(BaseRecipeOrAttrViewSet):
     """View set for the Ingredient API"""
-    permission_classes = [IsAuthenticated]
     queryset = Ingredient.objects.all().annotate(recipe_count=Count('recipes'))
     serializer_class = IngredientSerializer
-
-    def get_queryset(self):
-        """
-        Filter ingredients by current user id
-        (current user can see only his ingredients)
-        """
-        return self.queryset.filter(user=self.request.user.id).order_by('-id')
-
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
