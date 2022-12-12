@@ -6,7 +6,10 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from recipe.models import Recipe, Tag
+from recipe.models import (
+    Recipe,
+    Tag,
+    Ingredient,)
 
 
 class ModelTests(TestCase):
@@ -50,3 +53,15 @@ class ModelTests(TestCase):
         self.assertEqual(tag.name, str(tag))
         self.assertEqual(tag.user, self.user)
         self.assertEqual(tag.name, name)
+
+    def test_create_ingredient_successful(self):
+        """Test creating an ingredient is successful."""
+        name = 'Sample ingredient name'
+
+        ingredient = Ingredient.objects.create(
+            user=self.user,
+            name=name)
+
+        self.assertEqual(ingredient.name, str(ingredient))
+        self.assertEqual(ingredient.user, self.user)
+        self.assertEqual(ingredient.name, name)
