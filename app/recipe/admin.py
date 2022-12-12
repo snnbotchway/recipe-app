@@ -2,7 +2,8 @@
 
 from django.contrib import admin
 
-from .models import Recipe, Tag
+from .models import (
+    Recipe, Tag, Ingredient)
 
 
 class TagInline(admin.TabularInline):
@@ -28,6 +29,15 @@ class TagAdmin(admin.ModelAdmin):
     """Tag model configuration for the admin site"""
     autocomplete_fields = ['user']
     inlines = [TagInline]
+    list_display = ['name', 'user', 'id']
+    list_select_related = ['user']
+    search_fields = ['name__icontains']
+
+
+@admin.register(Ingredient)
+class IngredientAdmin(admin.ModelAdmin):
+    """Ingredient model configuration for the admin site"""
+    autocomplete_fields = ['user']
     list_display = ['name', 'user', 'id']
     list_select_related = ['user']
     search_fields = ['name__icontains']
