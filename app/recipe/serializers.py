@@ -3,11 +3,17 @@
 from rest_framework import serializers
 
 from .models import (
-    Recipe, Tag, Ingredient)
+    Ingredient,
+    IngredientImage,
+    Recipe,
+    RecipeImage,
+    Tag,
+)
 
 
 class BaseRecipeAttrSerializer(serializers.ModelSerializer):
     """Base serializer for recipe's many to many relations."""
+
     recipe_count = serializers.IntegerField(read_only=True)
 
     class Meta:
@@ -18,11 +24,30 @@ class BaseRecipeAttrSerializer(serializers.ModelSerializer):
         ]
 
 
+class IngredientImageSerializer(serializers.ModelSerializer):
+    """Serializer for ingredient images."""
+
+    class Meta:
+        model = IngredientImage
+        fields = ['id', 'image']
+
+    def create(self, validated_data):
+        """
+        Create and return an image for an ingredient by getting
+        it's id from the view.
+        """
+        return IngredientImage.objects.create(
+            ingredient_id=self.context['ingredient_id'], **validated_data)
+
+
 class IngredientSerializer(BaseRecipeAttrSerializer):
     """Ingredient serializer"""
 
+    images = IngredientImageSerializer(many=True, read_only=True)
+
     class Meta(BaseRecipeAttrSerializer.Meta):
         model = Ingredient
+        fields = BaseRecipeAttrSerializer.Meta.fields + ["images"]
 
 
 class TagSerializer(BaseRecipeAttrSerializer):
@@ -32,9 +57,27 @@ class TagSerializer(BaseRecipeAttrSerializer):
         model = Tag
 
 
+class RecipeImageSerializer(serializers.ModelSerializer):
+    """Serializer for recipe images."""
+
+    class Meta:
+        model = RecipeImage
+        fields = ['id', 'image']
+
+    def create(self, validated_data):
+        """
+        Create and return an image for an recipe by getting
+        it's id from the view.
+        """
+        return RecipeImage.objects.create(
+            recipe_id=self.context['recipe_id'], **validated_data)
+
+
 class RecipeSerializer(serializers.ModelSerializer):
-    """Simple recipe serializer(No description)"""
+    """Simple recipe serializer(No description nor ingredients)."""
+
     tags = TagSerializer(many=True)
+    images = RecipeImageSerializer(many=True, read_only=True)
 
     class Meta:
         model = Recipe
@@ -45,20 +88,24 @@ class RecipeSerializer(serializers.ModelSerializer):
             'price',
             'link',
             'tags',
+            'images',
         ]
 
 
 class RecipeDetailSerializer(RecipeSerializer):
     """Recipe detail serializer"""
+
     tags = TagSerializer(many=True, required=False)
     ingredients = IngredientSerializer(many=True, required=False)
+    images = RecipeImageSerializer(many=True, read_only=True)
 
     class Meta(RecipeSerializer.Meta):
         """Extend list of the simple serializer."""
+
         fields = RecipeSerializer.Meta.fields + [
             "description",
-            "tags",
             "ingredients",
+            "images",
         ]
 
     def _get_user(self):
