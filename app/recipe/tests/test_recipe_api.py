@@ -29,7 +29,7 @@ from rest_framework.test import APIClient
 
 
 RECIPES_URL = reverse('recipe:recipe-list')
-TESTS_FILE_DIR = 'test_data'
+TESTS_FILE_DIR = '/vol/web/test_data'
 
 
 def recipe_detail_url(recipe_id):
