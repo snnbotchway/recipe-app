@@ -20,7 +20,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Test
-        run: docker compose run --rm app sh -c "chmod 777 . && python manage.py wait_for_db &&
+        run: docker compose run --rm app sh -c "sudo chmod 777 . && python manage.py wait_for_db &&
           python manage.py test"
       - name: Lint
         run: docker compose run --rm app sh -c "flake8"
