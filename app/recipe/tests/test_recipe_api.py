@@ -1,25 +1,61 @@
 """Recipe API tests."""
 
 from decimal import Decimal
+import os
+import shutil
+import tempfile
 
 from django.contrib.auth import get_user_model
+from django.test import override_settings
 from django.test import TestCase
 from django.urls import reverse
 
+from PIL import Image
+
 from recipe.models import (
-    Recipe, Tag, Ingredient)
-from recipe.serializers import RecipeDetailSerializer, RecipeSerializer
+    Ingredient,
+    IngredientImage,
+    Recipe,
+    RecipeImage,
+    Tag,
+)
+from recipe.serializers import (
+    RecipeDetailSerializer,
+    RecipeSerializer,
+)
 
 from rest_framework import status
 from rest_framework.test import APIClient
 
 
 RECIPES_URL = reverse('recipe:recipe-list')
+TESTS_FILE_DIR = 'test_data'
 
 
 def recipe_detail_url(recipe_id):
     """Return a recipe detail URL."""
     return reverse('recipe:recipe-detail', args=[recipe_id])
+
+
+def recipe_images_list_url(recipe_id):
+    """Create and return a URL for a recipe's images."""
+    return reverse("recipe:recipe-images-list", args=[recipe_id])
+
+
+def recipe_image_detail_url(recipe_id, image_id):
+    """Create and return a URL for a recipe's image detail."""
+    return reverse("recipe:recipe-images-detail", args=[recipe_id, image_id])
+
+
+def ingredient_images_list_url(ingredient_id):
+    """Create and return a URL for an ingredient's images."""
+    return reverse("recipe:ingredient-images-list", args=[ingredient_id])
+
+
+def ingredient_image_detail_url(ingredient_id, image_id):
+    """Create and return a URL for an ingredient's image detail."""
+    return reverse(
+        "recipe:ingredient-images-detail", args=[ingredient_id, image_id])
 
 
 def create_recipe(user, **params):
@@ -40,8 +76,8 @@ def create_tag(user, name):
     return Tag.objects.create(user=user, name=name)
 
 
-def create_ingredient(user, name):
-    """Creates and returns new tag"""
+def create_ingredient(user, name="Sample Ingredient"):
+    """Creates and returns new ingredient"""
     return Ingredient.objects.create(user=user, name=name)
 
 
@@ -129,7 +165,7 @@ class PrivateRecipeAPITests(TestCase):
             "time_minutes": 1,
             "description": "Same recipe description",
             "price": Decimal(1),
-            "link": "https://recipelink.com",
+            "link": "httpsTEST_DIR://recipelink.com",
             "tags": [{"name": "Tag1"}, {"name": "Tag2"}],
         }
         self.update_tag_payload = {
@@ -812,3 +848,629 @@ class PrivateRecipeAPITests(TestCase):
                 self.assertEqual(
                     payload_tag_array[index][key],
                     recipe.tags.all()[index].name)
+
+
+class PublicRecipeImageTests(TestCase):
+    """Test unauthenticated requests."""
+
+    @override_settings(MEDIA_ROOT=(TESTS_FILE_DIR + '/media'))
+    def setUp(self) -> None:
+        """Set universal attributes for this test case."""
+
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            "user@example.com", "testPass123")
+        self.recipe = create_recipe(user=self.user)
+        self.recipe_image = RecipeImage.objects.create(recipe=self.recipe)
+
+    def tearDown(self):
+        """Delete the temporary directory for storing test data."""
+
+        try:
+            shutil.rmtree(TESTS_FILE_DIR)
+        except OSError:
+            pass
+
+    def test_anonymous_user_cannot_view_recipe_images(self):
+        """Anonymous user cannot view recipe images."""
+
+        url = recipe_images_list_url(self.recipe.id)
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertTrue(response.data.get("detail"))
+
+    @override_settings(MEDIA_ROOT=(TESTS_FILE_DIR + '/media'))
+    def test_anonymous_user_cannot_view_recipe_image(self):
+        """Anonymous user cannot view a recipe's image."""
+
+        url = recipe_image_detail_url(self.recipe.id, self.recipe_image.id)
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertTrue(response.data.get("detail"))
+        self.assertFalse(response.data.get("image"))
+
+    @override_settings(MEDIA_ROOT=(TESTS_FILE_DIR + '/media'))
+    def test_anonymous_user_cannot_create_recipe_image(self):
+        """Anonymous user cannot create a recipe's image."""
+
+        url = recipe_images_list_url(self.recipe.id)
+        with tempfile.NamedTemporaryFile(suffix=".mp4") as image_file:
+            img = Image.new("RGB", (10, 10))
+            img.save(image_file, format="JPEG")
+            image_file.seek(0)
+            payload = {"image": image_file}
+
+            response = self.client.post(url, payload, format="multipart")
+
+        recipe_images = RecipeImage.objects.all()
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(recipe_images.count(), 1)
+        self.assertTrue(response.data.get("detail"))
+
+    @override_settings(MEDIA_ROOT=(TESTS_FILE_DIR + '/media'))
+    def test_anonymous_user_cannot_update_recipe_image(self):
+        """Anonymous user cannot update a recipe's image."""
+
+        url = recipe_image_detail_url(self.recipe.id, self.recipe_image.id)
+        old_recipe_image = RecipeImage.objects.get(id=self.recipe_image.id)
+        with tempfile.NamedTemporaryFile(suffix=".mp4") as image_file:
+            img = Image.new("RGB", (10, 10))
+            img.save(image_file, format="JPEG")
+            image_file.seek(0)
+            payload = {"image": image_file}
+
+            response = self.client.patch(url, payload, format="multipart")
+
+        new_recipe_image = RecipeImage.objects.get(id=self.recipe_image.id)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(old_recipe_image.image, new_recipe_image.image)
+        self.assertTrue(response.data.get("detail"))
+
+    @override_settings(MEDIA_ROOT=(TESTS_FILE_DIR + '/media'))
+    def test_anonymous_user_cannot_delete_recipe_image(self):
+        """Anonymous user cannot delete a recipe's image."""
+
+        url = recipe_image_detail_url(self.recipe.id, self.recipe_image.id)
+
+        response = self.client.delete(url)
+
+        recipe_images = RecipeImage.objects.all()
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertTrue(response.data["detail"])
+        self.assertEqual(recipe_images.count(), 1)
+
+
+class PrivateRecipeImageTests(TestCase):
+    """Tests for the recipe image API."""
+
+    def setUp(self) -> None:
+        self.client = APIClient()
+        self.user1 = get_user_model().objects.create_user(
+            "user1@example.com", "testPass123")
+        self.user2 = get_user_model().objects.create_user(
+            "user2@example.com", "testPass123")
+        self.client.force_authenticate(self.user1)
+        self.recipe = create_recipe(user=self.user1)
+
+    def tearDown(self):
+        """Delete the temporary directory for storing test data."""
+
+        try:
+            shutil.rmtree(TESTS_FILE_DIR)
+        except OSError:
+            pass
+
+    @override_settings(MEDIA_ROOT=(TESTS_FILE_DIR + '/media'))
+    def test_upload_recipe_image_successful(self):
+        """Test uploading an image to a recipe is successful."""
+
+        url = recipe_images_list_url(self.recipe.id)
+        with tempfile.NamedTemporaryFile(suffix=".jpg") as image_file:
+            img = Image.new("RGB", (10, 10))
+            img.save(image_file, format="JPEG")
+            image_file.seek(0)
+            payload = {"image": image_file}
+
+            response = self.client.post(url, payload, format="multipart")
+
+        recipe_image = RecipeImage.objects.get(id=response.data.get("id"))
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("image", response.data)
+        self.assertTrue(os.path.exists(recipe_image.image.path))
+
+    @override_settings(MEDIA_ROOT=(TESTS_FILE_DIR + '/media'))
+    def test_create_recipe_image_is_limited_to_recipe_owner(self):
+        """Test non-owner of a recipe cannot upload an image."""
+
+        recipe = create_recipe(user=self.user2)
+        url = recipe_images_list_url(recipe.id)
+        with tempfile.NamedTemporaryFile(suffix=".jpg") as image_file:
+            img = Image.new("RGB", (10, 10))
+            img.save(image_file, format="JPEG")
+            image_file.seek(0)
+            payload = {"image": image_file}
+
+            response = self.client.post(url, payload, format="multipart")
+
+        recipe_images = RecipeImage.objects.filter(recipe=recipe)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn("detail", response.data)
+        self.assertFalse(recipe_images.exists())
+
+    @override_settings(MEDIA_ROOT=(TESTS_FILE_DIR + '/media'))
+    def test_invalid_recipe_image_extension_upload_fails(self):
+        """Test uploading a non image to a recipe fails."""
+
+        url = recipe_images_list_url(self.recipe.id)
+        with tempfile.NamedTemporaryFile(suffix=".mp4") as image_file:
+            img = Image.new("RGB", (10, 10))
+            img.save(image_file, format="JPEG")
+            image_file.seek(0)
+            payload = {"image": image_file}
+
+            response = self.client.post(url, payload, format="multipart")
+
+        recipe_image = RecipeImage.objects.filter(recipe=self.recipe)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("image", response.data)
+        self.assertFalse(recipe_image.exists())
+
+    def test_invalid_recipe_image_upload_fails(self):
+        """Test uploading an invalid image to a recipe fails."""
+
+        url = recipe_images_list_url(self.recipe.id)
+        payload = {"image": "not_an_image"}
+
+        response = self.client.post(url, payload, format="multipart")
+
+        recipe_image = RecipeImage.objects.filter(recipe=self.recipe)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("image", response.data)
+        self.assertFalse(recipe_image.exists())
+
+    @override_settings(MEDIA_ROOT=(TESTS_FILE_DIR + '/media'))
+    def test_get_recipe_image_list_successful(self):
+        """Test view all images of a recipe is successful."""
+
+        url = recipe_images_list_url(self.recipe.id)
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    @override_settings(MEDIA_ROOT=(TESTS_FILE_DIR + '/media'))
+    def test_get_recipe_image_list_is_limited_to_recipe_owner(self):
+        """Test only recipe owner can view recipe image list."""
+        recipe = create_recipe(user=self.user2)
+        url = recipe_images_list_url(recipe.id)
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn("detail", response.data)
+
+    @override_settings(MEDIA_ROOT=(TESTS_FILE_DIR + '/media'))
+    def test_get_recipe_image_detail_successful(self):
+        """Test view image of a recipe is successful."""
+
+        recipe_image = RecipeImage.objects.create(recipe=self.recipe)
+        url = recipe_image_detail_url(self.recipe.id, recipe_image.id)
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    @override_settings(MEDIA_ROOT=(TESTS_FILE_DIR + '/media'))
+    def test_get_recipe_image_detail_is_limited_to_recipe_owner(self):
+        """Test only recipe owner can view recipe image detail."""
+        recipe = create_recipe(user=self.user2)
+        recipe_image = RecipeImage.objects.create(recipe=recipe)
+        url = recipe_image_detail_url(recipe.id, recipe_image.id)
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn("detail", response.data)
+
+    @override_settings(MEDIA_ROOT=(TESTS_FILE_DIR + '/media'))
+    def test_update_recipe_image_successful(self):
+        """Test updating an image of a recipe is successful."""
+
+        old_recipe_image = RecipeImage.objects.create(recipe=self.recipe)
+        url = recipe_image_detail_url(self.recipe.id, old_recipe_image.id)
+        with tempfile.NamedTemporaryFile(suffix=".jpg") as image_file:
+            img = Image.new("RGB", (10, 10))
+            img.save(image_file, format="JPEG")
+            image_file.seek(0)
+            payload = {"image": image_file}
+
+            response = self.client.patch(url, payload, format="multipart")
+
+        new_recipe_image = RecipeImage.objects.get(recipe=self.recipe)
+        recipe_image = RecipeImage.objects.get(id=response.data.get("id"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("image", response.data)
+        self.assertTrue(os.path.exists(recipe_image.image.path))
+        self.assertNotEqual(old_recipe_image.image, new_recipe_image.image)
+
+    @override_settings(MEDIA_ROOT=(TESTS_FILE_DIR + '/media'))
+    def test_update_recipe_image_is_limited_to_recipe_owner(self):
+        """Test non-owner of a recipe cannot update the recipe's image."""
+
+        recipe = create_recipe(user=self.user2)
+        old_recipe_image = RecipeImage.objects.create(recipe=recipe)
+        url = recipe_image_detail_url(recipe.id, old_recipe_image.id)
+        with tempfile.NamedTemporaryFile(suffix=".jpg") as image_file:
+            img = Image.new("RGB", (10, 10))
+            img.save(image_file, format="JPEG")
+            image_file.seek(0)
+            payload = {"image": image_file}
+
+            response = self.client.patch(url, payload, format="multipart")
+
+        new_recipe_image = RecipeImage.objects.get(recipe=recipe)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn("detail", response.data)
+        self.assertEqual(old_recipe_image.image, new_recipe_image.image)
+
+    @override_settings(MEDIA_ROOT=(TESTS_FILE_DIR + '/media'))
+    def test_delete_recipe_image_is_successful(self):
+        """Test image of a recipe can be deleted."""
+
+        old_recipe_image = RecipeImage.objects.create(recipe=self.recipe)
+        url = recipe_image_detail_url(self.recipe.id, old_recipe_image.id)
+
+        response = self.client.delete(url)
+
+        new_recipe_image = RecipeImage.objects.filter(recipe=self.recipe)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(new_recipe_image.exists())
+
+    @override_settings(MEDIA_ROOT=(TESTS_FILE_DIR + '/media'))
+    def test_delete_recipe_image_is_limited_to_recipe_owner(self):
+        """Test non-owner of a recipe cannot delete the recipe's image."""
+
+        recipe = create_recipe(user=self.user2)
+        old_recipe_image = RecipeImage.objects.create(recipe=recipe)
+        url = recipe_image_detail_url(recipe.id, old_recipe_image.id)
+
+        response = self.client.delete(url)
+
+        new_recipe_image = RecipeImage.objects.get(id=old_recipe_image.id)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn("detail", response.data)
+        self.assertEqual(old_recipe_image.image, new_recipe_image.image)
+
+
+class PublicIngredientImageTests(TestCase):
+    """Test unauthenticated requests."""
+
+    @override_settings(MEDIA_ROOT=(TESTS_FILE_DIR + '/media'))
+    def setUp(self) -> None:
+        """Set universal attributes for this test case."""
+
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            "user@example.com", "testPass123")
+        self.ingredient = create_ingredient(user=self.user)
+        self.ingredient_image = IngredientImage.objects.create(
+            ingredient=self.ingredient)
+
+    def tearDown(self):
+        """Delete the temporary directory for storing test data."""
+
+        try:
+            shutil.rmtree(TESTS_FILE_DIR)
+        except OSError:
+            pass
+
+    def test_anonymous_user_cannot_view_ingredient_images(self):
+        """Anonymous user cannot view ingredient images."""
+
+        url = ingredient_images_list_url(self.ingredient.id)
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertTrue(response.data.get("detail"))
+
+    @override_settings(MEDIA_ROOT=(TESTS_FILE_DIR + '/media'))
+    def test_anonymous_user_cannot_view_ingredient_image(self):
+        """Anonymous user cannot view an ingredient's image."""
+
+        url = ingredient_image_detail_url(
+            self.ingredient.id, self.ingredient_image.id)
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertTrue(response.data.get("detail"))
+        self.assertFalse(response.data.get("image"))
+
+    @override_settings(MEDIA_ROOT=(TESTS_FILE_DIR + '/media'))
+    def test_anonymous_user_cannot_create_ingredient_image(self):
+        """Anonymous user cannot create an ingredient's image."""
+
+        url = ingredient_images_list_url(self.ingredient.id)
+        with tempfile.NamedTemporaryFile(suffix=".mp4") as image_file:
+            img = Image.new("RGB", (10, 10))
+            img.save(image_file, format="JPEG")
+            image_file.seek(0)
+            payload = {"image": image_file}
+
+            response = self.client.post(url, payload, format="multipart")
+
+        ingredient_images = IngredientImage.objects.all()
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(ingredient_images.count(), 1)
+        self.assertTrue(response.data.get("detail"))
+
+    @override_settings(MEDIA_ROOT=(TESTS_FILE_DIR + '/media'))
+    def test_anonymous_user_cannot_update_ingredient_image(self):
+        """Anonymous user cannot update an ingredient's image."""
+
+        url = ingredient_image_detail_url(
+            self.ingredient.id, self.ingredient_image.id)
+        old_ingredient_image = IngredientImage.objects.get(
+            id=self.ingredient_image.id)
+        with tempfile.NamedTemporaryFile(suffix=".mp4") as image_file:
+            img = Image.new("RGB", (10, 10))
+            img.save(image_file, format="JPEG")
+            image_file.seek(0)
+            payload = {"image": image_file}
+
+            response = self.client.patch(url, payload, format="multipart")
+
+        new_ingredient_image = IngredientImage.objects.get(
+            id=self.ingredient_image.id)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(old_ingredient_image.image,
+                         new_ingredient_image.image)
+        self.assertTrue(response.data.get("detail"))
+
+    @override_settings(MEDIA_ROOT=(TESTS_FILE_DIR + '/media'))
+    def test_anonymous_user_cannot_delete_ingredient_image(self):
+        """Anonymous user cannot delete an ingredient's image."""
+
+        url = ingredient_image_detail_url(
+            self.ingredient.id, self.ingredient_image.id)
+
+        response = self.client.delete(url)
+
+        ingredient_images = IngredientImage.objects.all()
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertTrue(response.data["detail"])
+        self.assertEqual(ingredient_images.count(), 1)
+
+
+class PrivateIngredientImageTests(TestCase):
+    """Tests for the ingredient image API."""
+
+    def setUp(self) -> None:
+        self.client = APIClient()
+        self.user1 = get_user_model().objects.create_user(
+            "user1@example.com", "testPass123")
+        self.user2 = get_user_model().objects.create_user(
+            "user2@example.com", "testPass123")
+        self.client.force_authenticate(self.user1)
+        self.ingredient = create_ingredient(user=self.user1)
+
+    def tearDown(self):
+        """Delete the temporary directory for storing test data."""
+
+        try:
+            shutil.rmtree(TESTS_FILE_DIR)
+        except OSError:
+            pass
+
+    @override_settings(MEDIA_ROOT=(TESTS_FILE_DIR + '/media'))
+    def test_upload_ingredient_image_successful(self):
+        """Test uploading an image to an ingredient is successful."""
+
+        url = ingredient_images_list_url(self.ingredient.id)
+        with tempfile.NamedTemporaryFile(suffix=".jpg") as image_file:
+            img = Image.new("RGB", (10, 10))
+            img.save(image_file, format="JPEG")
+            image_file.seek(0)
+            payload = {"image": image_file}
+
+            response = self.client.post(url, payload, format="multipart")
+
+        ingredient_image = IngredientImage.objects.get(
+            id=response.data.get("id"))
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("image", response.data)
+        self.assertTrue(os.path.exists(ingredient_image.image.path))
+
+    @override_settings(MEDIA_ROOT=(TESTS_FILE_DIR + '/media'))
+    def test_create_ingredient_image_is_limited_to_ingredient_owner(self):
+        """Test non-owner of an ingredient cannot upload an image."""
+
+        ingredient = create_ingredient(user=self.user2)
+        url = ingredient_images_list_url(ingredient.id)
+        with tempfile.NamedTemporaryFile(suffix=".jpg") as image_file:
+            img = Image.new("RGB", (10, 10))
+            img.save(image_file, format="JPEG")
+            image_file.seek(0)
+            payload = {"image": image_file}
+
+            response = self.client.post(url, payload, format="multipart")
+
+        ingredient_images = IngredientImage.objects.filter(
+            ingredient=ingredient)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn("detail", response.data)
+        self.assertFalse(ingredient_images.exists())
+
+    @override_settings(MEDIA_ROOT=(TESTS_FILE_DIR + '/media'))
+    def test_invalid_ingredient_image_extension_upload_fails(self):
+        """Test uploading a non image to an ingredient fails."""
+
+        url = ingredient_images_list_url(self.ingredient.id)
+        with tempfile.NamedTemporaryFile(suffix=".mp4") as image_file:
+            img = Image.new("RGB", (10, 10))
+            img.save(image_file, format="JPEG")
+            image_file.seek(0)
+            payload = {"image": image_file}
+
+            response = self.client.post(url, payload, format="multipart")
+
+        ingredient_image = IngredientImage.objects.filter(
+            ingredient=self.ingredient)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("image", response.data)
+        self.assertFalse(ingredient_image.exists())
+
+    def test_invalid_ingredient_image_upload_fails(self):
+        """Test uploading an invalid image to an ingredient fails."""
+
+        url = ingredient_images_list_url(self.ingredient.id)
+        payload = {"image": "not_an_image"}
+
+        response = self.client.post(url, payload, format="multipart")
+
+        ingredient_image = IngredientImage.objects.filter(
+            ingredient=self.ingredient)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("image", response.data)
+        self.assertFalse(ingredient_image.exists())
+
+    @override_settings(MEDIA_ROOT=(TESTS_FILE_DIR + '/media'))
+    def test_get_ingredient_image_list_successful(self):
+        """Test view all images of an ingredient is successful."""
+
+        url = ingredient_images_list_url(self.ingredient.id)
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    @override_settings(MEDIA_ROOT=(TESTS_FILE_DIR + '/media'))
+    def test_get_ingredient_image_list_is_limited_to_ingredient_owner(self):
+        """Test only ingredient owner can view ingredient image list."""
+        ingredient = create_ingredient(user=self.user2)
+        url = ingredient_images_list_url(ingredient.id)
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn("detail", response.data)
+
+    @override_settings(MEDIA_ROOT=(TESTS_FILE_DIR + '/media'))
+    def test_get_ingredient_image_detail_successful(self):
+        """Test view image of an ingredient is successful."""
+
+        ingredient_image = IngredientImage.objects.create(
+            ingredient=self.ingredient)
+        url = ingredient_image_detail_url(
+            self.ingredient.id, ingredient_image.id)
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    @override_settings(MEDIA_ROOT=(TESTS_FILE_DIR + '/media'))
+    def test_get_ingredient_image_detail_is_limited_to_ingredient_owner(self):
+        """Test only ingredient owner can view ingredient image detail."""
+        ingredient = create_ingredient(user=self.user2)
+        ingredient_image = IngredientImage.objects.create(
+            ingredient=ingredient)
+        url = ingredient_image_detail_url(ingredient.id, ingredient_image.id)
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn("detail", response.data)
+
+    @override_settings(MEDIA_ROOT=(TESTS_FILE_DIR + '/media'))
+    def test_update_ingredient_image_successful(self):
+        """Test updating an image of an ingredient is successful."""
+
+        old_ingredient_image = IngredientImage.objects.create(
+            ingredient=self.ingredient)
+        url = ingredient_image_detail_url(
+            self.ingredient.id, old_ingredient_image.id)
+        with tempfile.NamedTemporaryFile(suffix=".jpg") as image_file:
+            img = Image.new("RGB", (10, 10))
+            img.save(image_file, format="JPEG")
+            image_file.seek(0)
+            payload = {"image": image_file}
+
+            response = self.client.patch(url, payload, format="multipart")
+
+        new_ingredient_image = IngredientImage.objects.get(
+            ingredient=self.ingredient)
+        ingredient_image = IngredientImage.objects.get(
+            id=response.data.get("id"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("image", response.data)
+        self.assertTrue(os.path.exists(ingredient_image.image.path))
+        self.assertNotEqual(old_ingredient_image.image,
+                            new_ingredient_image.image)
+
+    @override_settings(MEDIA_ROOT=(TESTS_FILE_DIR + '/media'))
+    def test_update_ingredient_image_is_limited_to_ingredient_owner(self):
+        """
+        Test non-owner of an ingredient cannot update the ingredient's image.
+        """
+
+        ingredient = create_ingredient(user=self.user2)
+        old_ingredient_image = IngredientImage.objects.create(
+            ingredient=ingredient)
+        url = ingredient_image_detail_url(
+            ingredient.id, old_ingredient_image.id)
+        with tempfile.NamedTemporaryFile(suffix=".jpg") as image_file:
+            img = Image.new("RGB", (10, 10))
+            img.save(image_file, format="JPEG")
+            image_file.seek(0)
+            payload = {"image": image_file}
+
+            response = self.client.patch(url, payload, format="multipart")
+
+        new_ingredient_image = IngredientImage.objects.get(
+            ingredient=ingredient)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn("detail", response.data)
+        self.assertEqual(old_ingredient_image.image,
+                         new_ingredient_image.image)
+
+    @override_settings(MEDIA_ROOT=(TESTS_FILE_DIR + '/media'))
+    def test_delete_ingredient_image_is_successful(self):
+        """Test image of an ingredient can be deleted."""
+
+        old_ingredient_image = IngredientImage.objects.create(
+            ingredient=self.ingredient)
+        url = ingredient_image_detail_url(
+            self.ingredient.id, old_ingredient_image.id)
+
+        response = self.client.delete(url)
+
+        new_ingredient_image = IngredientImage.objects.filter(
+            ingredient=self.ingredient)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(new_ingredient_image.exists())
+
+    @override_settings(MEDIA_ROOT=(TESTS_FILE_DIR + '/media'))
+    def test_delete_ingredient_image_is_limited_to_ingredient_owner(self):
+        """
+        Test non-owner of an ingredient cannot delete the ingredient's image.
+        """
+
+        ingredient = create_ingredient(user=self.user2)
+        old_ingredient_image = IngredientImage.objects.create(
+            ingredient=ingredient)
+        url = ingredient_image_detail_url(
+            ingredient.id, old_ingredient_image.id)
+
+        response = self.client.delete(url)
+
+        new_ingredient_image = IngredientImage.objects.get(
+            id=old_ingredient_image.id)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn("detail", response.data)
+        self.assertEqual(old_ingredient_image.image,
+                         new_ingredient_image.image)
