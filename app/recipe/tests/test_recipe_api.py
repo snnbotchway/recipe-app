@@ -61,9 +61,9 @@ def ingredient_image_detail_url(ingredient_id, image_id):
 def create_recipe(user, **params):
     """Creates and returns new recipe"""
     defaults = {
-        "title": "a",
+        "title": "Sample recipe title",
         "time_minutes": 5,
-        "description": "a",
+        "description": "Sample recipe description",
         "price": Decimal('34.12'),
         "link": "https://recipe.com/recipe.pdf"
     }
@@ -1474,3 +1474,60 @@ class PrivateIngredientImageTests(TestCase):
         self.assertIn("detail", response.data)
         self.assertEqual(old_ingredient_image.image,
                          new_ingredient_image.image)
+
+
+class RecipeFilterTests(TestCase):
+    """Test filters on the recipe API."""
+
+    def setUp(self):
+        """Populate the test database for filtering tests."""
+
+        self.user = get_user_model().objects.create_user(
+            "email@example.com",
+            "password123",
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+        self.recipe1 = create_recipe(user=self.user)
+        self.recipe2 = create_recipe(user=self.user)
+        self.recipe3 = create_recipe(user=self.user)
+        self.tag1 = create_tag(user=self.user, name="Tag1")
+        self.tag2 = create_tag(user=self.user, name="Tag2")
+        self.ingredient1 = create_ingredient(
+            user=self.user, name="Ingredient1")
+        self.ingredient2 = create_ingredient(
+            user=self.user, name="Ingredient2"
+        )
+        self.recipe1.tags.add(self.tag1)
+        self.recipe2.tags.add(self.tag2)
+        self.recipe1.ingredients.add(self.ingredient1)
+        self.recipe2.ingredients.add(self.ingredient2)
+        self.serializer1 = RecipeSerializer(self.recipe1)
+        self.serializer2 = RecipeSerializer(self.recipe2)
+        self.serializer3 = RecipeSerializer(self.recipe3)
+
+    def test_filter_recipes_by_tags(self):
+        """Test filter recipes by tags."""
+
+        params = {"tags": f"{self.tag1.id},{self.tag2.id}"}
+
+        response = self.client.get(RECIPES_URL, params)
+
+        self.assertEqual(len(response.data), 2)
+        self.assertIn(self.serializer1.data, response.data)
+        self.assertIn(self.serializer2.data, response.data)
+        self.assertNotIn(self.serializer3.data, response.data)
+
+    def test_filter_recipes_by_ingredients(self):
+        """Test filter recipes by ingredients."""
+
+        params = {
+            "ingredients": f"{self.ingredient1.id},{self.ingredient2.id}"
+        }
+
+        response = self.client.get(RECIPES_URL, params)
+
+        self.assertEqual(len(response.data), 2)
+        self.assertIn(self.serializer1.data, response.data)
+        self.assertIn(self.serializer2.data, response.data)
+        self.assertNotIn(self.serializer3.data, response.data)
