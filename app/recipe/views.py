@@ -1,5 +1,13 @@
 """Views for the recipe APIs"""
+
 from django.db.models import Count
+
+from drf_spectacular.utils import (
+    extend_schema_view,
+    extend_schema,
+    OpenApiParameter,
+    OpenApiTypes,
+)
 
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.viewsets import ModelViewSet
@@ -15,7 +23,6 @@ from .permissions import (
     IsRecipeOwner,
     IsIngredientOwner,
 )
-
 from .serializers import (
     RecipeDetailSerializer,
     RecipeSerializer,
@@ -26,6 +33,20 @@ from .serializers import (
 )
 
 
+# Extend API documentation with filter documentation.
+@extend_schema_view(
+    list=extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="assigned_only",
+                type=OpenApiTypes.INT,
+                enum=[0, 1],
+                description="Filter items by those assigned to a recipe.",
+                required=False,
+            ),
+        ],
+    ),
+)
 class BaseRecipeOrAttrViewSet(ModelViewSet):
     """Base view set for recipe and its attributes."""
 
@@ -33,21 +54,67 @@ class BaseRecipeOrAttrViewSet(ModelViewSet):
 
     def get_queryset(self):
         """
-        Filter queryset by current user id
-        (current user can see only his specified items)
+        Return appropriate queryset considering current user and filters.
         """
-        return self.queryset.filter(user=self.request.user.id).order_by('-id')
+        queryset = self.queryset.filter(
+            user=self.request.user.id).order_by("-id")
+        assigned_only = int(self.request.query_params.get("assigned_only", 0))
+        if assigned_only:
+            # Filter items by those that are assigned to at least
+            # one recipe
+            queryset = queryset.filter(recipes__isnull=False)
+        return queryset
 
     def perform_create(self, serializer):
         """Provide serializer with current user."""
         serializer.save(user=self.request.user)
 
 
-class RecipeViewSet(BaseRecipeOrAttrViewSet):
+# Extend API documentation with filter documentation.
+@extend_schema_view(
+    list=extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="tags",
+                type=OpenApiTypes.STR,
+                description="Comma-separated list of tag IDs",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="ingredients",
+                type=OpenApiTypes.STR,
+                description="Comma-separated list of ingredient IDs",
+                required=False,
+            ),
+        ],
+    ),
+)
+class RecipeViewSet(ModelViewSet):
     """View set for the recipe API"""
+
+    permission_classes = [IsAuthenticated]
 
     queryset = Recipe.objects.all().prefetch_related(
         "tags", "ingredients", "images")
+
+    def get_queryset(self):
+        """Returns appropriate recipe queryset."""
+
+        queryset = self.queryset.filter(
+            user=self.request.user.id).order_by('-id')
+        tags = self.request.query_params.get("tags")
+        ingredients = self.request.query_params.get("ingredients")
+        if tags:
+            tag_ids = tags.split(",")
+            queryset = queryset.filter(tags__id__in=tag_ids)
+        if ingredients:
+            ingredient_ids = ingredients.split(",")
+            queryset = queryset.filter(ingredients__id__in=ingredient_ids)
+        return queryset.distinct()
+
+    def perform_create(self, serializer):
+        """Provide serializer with current user."""
+        serializer.save(user=self.request.user)
 
     def get_serializer_class(self):
         """Determines which serializer to use"""
