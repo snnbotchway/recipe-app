@@ -1,10 +1,15 @@
 """Tag API tests."""
 
+from decimal import Decimal
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from recipe.models import Tag
+from recipe.models import (
+    Recipe,
+    Tag,
+)
 from recipe.serializers import TagSerializer
 
 from rest_framework import status
@@ -227,3 +232,63 @@ class PrivateTagAPITests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         self.assertTrue(response.data["detail"])
         self.assertTrue(Tag.objects.filter(id=tag.id).exists())
+
+    def test_tag_filter(self):
+        """Test filter tags by those assigned to recipes."""
+
+        tag1 = create_tag(user=self.user1, name="tag1")
+        create_tag(user=self.user1, name="tag2")
+        recipe1 = Recipe.objects.create(
+            user=self.user1,
+            title="Sample recipe title1",
+            time_minutes=5,
+            description="Sample recipe description1",
+            price=Decimal("34.12"),
+            link="https:recipe.com/recipe.pdf",
+        )
+        recipe2 = Recipe.objects.create(
+            user=self.user1,
+            title="Sample recipe title2",
+            time_minutes=5,
+            description="Sample recipe description2",
+            price=Decimal("34.12"),
+            link="https:recipe.com/recipe.pdf",
+        )
+        recipe1.tags.add(tag1)
+        recipe2.tags.add(tag1)
+        params = {"assigned_only": 1}
+
+        response = self.client.get(TAGS_URL, params)
+
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(
+            tag1.id, response.data[0].get("id"))
+
+    def test_tag_filter_when_assigned_only_is_0(self):
+        """Test no filter tags when assigned_only is 0."""
+
+        tag1 = create_tag(user=self.user1, name="tag1")
+        create_tag(user=self.user1, name="tag2")
+        recipe1 = Recipe.objects.create(
+            user=self.user1,
+            title="Sample recipe title1",
+            time_minutes=5,
+            description="Sample recipe description1",
+            price=Decimal("34.12"),
+            link="https:recipe.com/recipe.pdf",
+        )
+        recipe2 = Recipe.objects.create(
+            user=self.user1,
+            title="Sample recipe title2",
+            time_minutes=5,
+            description="Sample recipe description2",
+            price=Decimal("34.12"),
+            link="https:recipe.com/recipe.pdf",
+        )
+        recipe1.tags.add(tag1)
+        recipe2.tags.add(tag1)
+        params = {"assigned_only": 0}
+
+        response = self.client.get(TAGS_URL, params)
+
+        self.assertEqual(len(response.data), 2)
