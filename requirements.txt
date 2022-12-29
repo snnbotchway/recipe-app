@@ -4,3 +4,4 @@ psycopg2>=2.8.6,<2.9
 drf-spectacular>=0.22.1,<0.23
 Pillow>=9.3.0,<9.4.0
 drf-nested-routers>=0.93.4,<0.94
+uwsgi>=2.0.19<2.1
