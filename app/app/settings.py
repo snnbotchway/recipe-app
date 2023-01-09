@@ -88,7 +88,9 @@ ROOT_URLCONF = 'app.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [
+            os.path.join(BASE_DIR, "build"),
+        ],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -159,6 +161,11 @@ MEDIA_URL = "/static/media/"
 
 STATIC_ROOT = "/vol/web/static"
 MEDIA_ROOT = "/vol/web/media"
+
+STATICFILES_DIRS = [
+    BASE_DIR / "static",
+    BASE_DIR / "build/static",
+]
 
 
 # Default primary key field type
